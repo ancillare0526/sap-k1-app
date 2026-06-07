@@ -23,11 +23,17 @@ def load_data():
     # Pulizia colonne
     df.columns = df.columns.str.strip()
 
-    # Conversione data
-    if "Inizio validità" in df.columns:
-        df["Inizio validità"] = pd.to_datetime(df["Inizio validità"], errors='coerce')
+    # ✅ CONVERSIONE SICURA (evita errori pyarrow)
+    for col in df.columns:
+        df[col] = df[col].astype(str)
 
-        # ✅ REGOLA: tieni SOLO la più recente per ogni Conto SAP
+    # ✅ Gestione data + deduplica
+    if "Inizio validità" in df.columns:
+        df["Inizio validità"] = pd.to_datetime(
+            df["Inizio validità"], errors='coerce'
+        )
+
+        # ✅ Tieni solo la riga più recente per ogni Conto SAP
         df = (
             df.sort_values("Inizio validità", ascending=False)
               .drop_duplicates(subset=["Conto Sap"], keep="first")
@@ -47,15 +53,15 @@ with st.sidebar:
     **Come usare il tool:**
     - Puoi compilare uno o più campi
     - Le ricerche sono parziali
-    - È sempre mostrata la versione più recente
+    - Viene mostrata solo la versione più recente
     """)
 
 # =========================
-# FILTRI (UI MIGLIORATA)
+# FILTRI
 # =========================
 st.subheader("🔧 Filtri di ricerca")
 
-col1, col2 = st.columns([2, 1])  # SAP più grande
+col1, col2 = st.columns([2, 1])  # SAP più largo
 
 with col1:
     conto_sap = st.text_input("Conto SAP", placeholder="Es. 6260")
@@ -78,26 +84,26 @@ filtered_df = df.copy()
 
 if conto_sap:
     filtered_df = filtered_df[
-        filtered_df["Conto Sap"].astype(str).str.contains(conto_sap, case=False, na=False)
+        filtered_df["Conto Sap"].str.contains(conto_sap, case=False, na=False)
     ]
 
 if desc_sap:
     filtered_df = filtered_df[
-        filtered_df["Descrizione conto Sap"].astype(str).str.contains(desc_sap, case=False, na=False)
+        filtered_df["Descrizione conto Sap"].str.contains(desc_sap, case=False, na=False)
     ]
 
 if k1:
     filtered_df = filtered_df[
-        filtered_df["Voce K1"].astype(str).str.contains(k1, case=False, na=False)
+        filtered_df["Voce K1"].str.contains(k1, case=False, na=False)
     ]
 
 if desc_k1:
     filtered_df = filtered_df[
-        filtered_df["Descrizione conto NCG"].astype(str).str.contains(desc_k1, case=False, na=False)
+        filtered_df["Descrizione conto NCG"].str.contains(desc_k1, case=False, na=False)
     ]
 
 # =========================
-# ORDINAMENTO (UX MIGLIORE)
+# ORDINAMENTO
 # =========================
 if "Conto Sap" in filtered_df.columns:
     filtered_df = filtered_df.sort_values("Conto Sap")
@@ -107,18 +113,9 @@ if "Conto Sap" in filtered_df.columns:
 # =========================
 st.subheader(f"📊 Risultati trovati: {len(filtered_df)}")
 
-# Evidenzia colonne chiave
-def highlight_cols(df):
-    return df.style.set_properties(**{
-        'font-weight': 'bold'
-    }, subset=["Conto Sap"]) \
-    .set_properties(**{
-        'color': '#0b5394'
-    }, subset=["Voce K1"])
-
 if len(filtered_df) > 0:
     st.dataframe(
-        highlight_cols(filtered_df),
+        filtered_df,
         use_container_width=True,
         height=600
     )
@@ -138,15 +135,15 @@ st.download_button(
 )
 
 # =========================
-# EXTRA: VISTA PER K1
+# VISTA PER K1
 # =========================
 st.markdown("---")
 st.subheader("🔍 Vista per K1")
 
-k1_sel = st.text_input("Inserisci K1 per vedere tutti i conti SAP collegati")
+k1_sel = st.text_input("Inserisci K1 per vedere tutti i SAP collegati")
 
 if k1_sel:
-    df_k1 = df[df["Voce K1"].astype(str).str.contains(k1_sel, case=False, na=False)]
+    df_k1 = df[df["Voce K1"].str.contains(k1_sel, case=False, na=False)]
 
     st.write(f"Conti SAP collegati: {len(df_k1)}")
 
