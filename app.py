@@ -2,80 +2,81 @@ import streamlit as st
 import pandas as pd
 
 # =========================
-# CONFIG PAGINA
+# CONFIG
 # =========================
 st.set_page_config(
-    page_title="Ricerca SAP ↔ K1",
+    page_title="SAP ↔ K1",
     layout="wide",
-    page_icon="🔎"
+    page_icon="💼"
 )
 
-st.title("🔎 Ricerca Conti SAP ↔ K1")
-st.markdown("Trova rapidamente la relazione tra conti SAP e K1")
+# =========================
+# STILE CUSTOM
+# =========================
+st.markdown("""
+<style>
+    .main {
+        background-color: #f8f9fa;
+    }
+    .block-container {
+        padding-top: 2rem;
+    }
+    div[data-testid="stDataFrame"] {
+        border: 1px solid #ddd;
+        border-radius: 10px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # =========================
-# CARICAMENTO DATI
+# HEADER
+# =========================
+st.markdown("""
+# 💼 Mappatura Conti SAP ↔ K1
+### Ricerca veloce e dinamica
+""")
+
+# =========================
+# LOAD DATA
 # =========================
 @st.cache_data
 def load_data():
     df = pd.read_excel("XBRALLASA.XLSX", engine="openpyxl")
-
-    # Pulizia colonne
     df.columns = df.columns.str.strip()
 
-    # ✅ CONVERSIONE SICURA (evita errori pyarrow)
     for col in df.columns:
         df[col] = df[col].astype(str)
 
-    # ✅ Gestione data + deduplica
     if "Inizio validità" in df.columns:
-        df["Inizio validità"] = pd.to_datetime(
-            df["Inizio validità"], errors='coerce'
-        )
+        df["Inizio validità"] = pd.to_datetime(df["Inizio validità"], errors='coerce')
 
-        # ✅ Tieni solo la riga più recente per ogni Conto SAP
         df = (
             df.sort_values("Inizio validità", ascending=False)
               .drop_duplicates(subset=["Conto Sap"], keep="first")
         )
-
     return df
 
 df = load_data()
 
 # =========================
-# SIDEBAR INFO
+# FILTRI (CARD STYLE)
 # =========================
-with st.sidebar:
-    st.header("ℹ️ Info")
-    st.write(f"Totale conti unici: **{len(df)}**")
-    st.markdown("""
-    **Come usare il tool:**
-    - Puoi compilare uno o più campi
-    - Le ricerche sono parziali
-    - Viene mostrata solo la versione più recente
-    """)
+st.markdown("## 🔎 Filtri di ricerca")
 
-# =========================
-# FILTRI
-# =========================
-st.subheader("🔧 Filtri di ricerca")
+with st.container():
+    col1, col2, col3, col4 = st.columns([2, 1, 2, 2])
 
-col1, col2 = st.columns([2, 1])  # SAP più largo
+    with col1:
+        conto_sap = st.text_input("Conto SAP", placeholder="Es. 6260105001")
 
-with col1:
-    conto_sap = st.text_input("Conto SAP", placeholder="Es. 6260")
+    with col2:
+        k1 = st.text_input("K1")
 
-with col2:
-    k1 = st.text_input("Voce K1", placeholder="Es. 00335")
+    with col3:
+        desc_sap = st.text_input("Descrizione SAP")
 
-col3, col4 = st.columns(2)
-
-with col3:
-    desc_sap = st.text_input("Descrizione conto SAP")
-
-with col4:
-    desc_k1 = st.text_input("Descrizione conto NCG")
+    with col4:
+        desc_k1 = st.text_input("Descrizione K1")
 
 # =========================
 # FILTRAGGIO
@@ -103,44 +104,37 @@ if desc_k1:
     ]
 
 # =========================
-# ORDINAMENTO
+# KPI (molto più moderno)
 # =========================
-if "Conto Sap" in filtered_df.columns:
-    filtered_df = filtered_df.sort_values("Conto Sap")
+colA, colB = st.columns(2)
+
+with colA:
+    st.metric("Conti trovati", len(filtered_df))
+
+with colB:
+    st.metric("Totale conti unici", len(df))
 
 # =========================
-# OUTPUT
+# RISULTATI
 # =========================
-st.subheader(f"📊 Risultati trovati: {len(filtered_df)}")
+st.markdown("## 📊 Risultati")
 
 if len(filtered_df) > 0:
     st.dataframe(
-        filtered_df,
+        filtered_df.sort_values("Conto Sap"),
         use_container_width=True,
-        height=600
+        height=550
     )
 else:
-    st.warning("⚠️ Nessun risultato trovato")
-
-# =========================
-# DOWNLOAD
-# =========================
-def convert_xlsx(df):
-    return df.to_excel(index=False, engine='openpyxl')
-
-st.download_button(
-    label="⬇️ Scarica risultati Excel",
-    data=convert_xlsx(filtered_df),
-    file_name="risultati_ricerca.xlsx"
-)
+    st.info("Nessun risultato trovato")
 
 # =========================
 # VISTA PER K1
 # =========================
 st.markdown("---")
-st.subheader("🔍 Vista per K1")
+st.markdown("## 🔁 Ricerca inversa (K1 → SAP)")
 
-k1_sel = st.text_input("Inserisci K1 per vedere tutti i SAP collegati")
+k1_sel = st.text_input("Inserisci K1")
 
 if k1_sel:
     df_k1 = df[df["Voce K1"].str.contains(k1_sel, case=False, na=False)]
@@ -151,3 +145,14 @@ if k1_sel:
         df_k1.sort_values("Conto Sap"),
         use_container_width=True
     )
+
+# =========================
+# DOWNLOAD
+# =========================
+st.markdown("---")
+
+st.download_button(
+    "⬇️ Scarica risultati",
+    data=filtered_df.to_csv(index=False).encode("utf-8"),
+    file_name="risultati.csv"
+)
